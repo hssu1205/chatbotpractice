@@ -47,8 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const openai = new OpenAI({ apiKey });
 
-    // OpenAI Responses API 호출 (gpt-6-luna, reasoning.effort: 'none')
-    const response = await openai.responses.create({
+    // OpenAI Responses API 스트리밍 호출 (gpt-6-luna, reasoning.effort: 'none')
+    const stream = await openai.responses.create({
       model: 'gpt-6-luna',
       reasoning: {
         effort: 'none',
@@ -58,18 +58,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role: m.role,
         content: m.content,
       })),
+      stream: true,
     });
 
-    const reply = response.output_text ?? '';
+    res.status(200);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
 
-    return res.status(200).json({ reply });
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta' && event.delta) {
+        res.write(event.delta);
+      }
+    }
+
+    res.end();
   } catch (error: any) {
-    console.error('OpenAI Responses API Error:', error);
+    console.error('OpenAI Responses API Streaming Error:', error);
     const errorMessage =
       error?.response?.data?.error?.message ||
       error?.message ||
       'OpenAI API 호출 중 오류가 발생했습니다.';
 
-    return res.status(500).json({ error: errorMessage });
+    if (!res.headersSent) {
+      return res.status(500).json({ error: errorMessage });
+    }
+
+    res.end();
   }
 }

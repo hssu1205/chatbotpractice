@@ -9,10 +9,13 @@ export interface ChatApiResponse {
 }
 
 /**
- * 프런트엔드에서 서버리스 엔드포인트 /api/chat을 호출하는 함수
- * 실제 API Key는 서버 환경 변수에서 안전하게 처리됩니다.
+ * 프런트엔드에서 서버리스 엔드포인트 /api/chat을 스트리밍 방식으로 호출하는 함수
+ * 청크 단위로 텍스트가 수신될 때마다 onChunk 콜백을 호출하여 실시간 타이핑 효과를 구현합니다.
  */
-export async function sendChatMessage(messages: ChatMessage[]): Promise<string> {
+export async function sendChatMessageStream(
+  messages: ChatMessage[],
+  onChunk: (chunk: string) => void
+): Promise<string> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
@@ -34,6 +37,21 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<string> 
     throw new Error(errorDetail);
   }
 
-  const data: ChatApiResponse = await response.json();
-  return data.reply ?? '';
+  if (!response.body) {
+    throw new Error('응답 스트림을 읽을 수 없습니다.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let fullText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    fullText += chunk;
+    onChunk(chunk);
+  }
+
+  return fullText;
 }

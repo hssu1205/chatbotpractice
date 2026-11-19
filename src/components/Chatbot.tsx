@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { sendChatMessage, type ChatMessage } from '../api/chat';
+import { sendChatMessageStream, type ChatMessage } from '../api/chat';
 import './Chatbot.css';
 
 const INITIAL_MESSAGE: ChatMessage = {
@@ -20,6 +20,7 @@ export const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,7 +36,7 @@ export const Chatbot: React.FC = () => {
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend ?? inputValue).trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || isStreaming) return;
 
     const userMessage: ChatMessage = { role: 'user', content: text };
     const newMessages = [...messages, userMessage];
@@ -44,17 +45,38 @@ export const Chatbot: React.FC = () => {
     setInputValue('');
     setErrorMessage(null);
     setIsLoading(true);
+    setIsStreaming(true);
 
     try {
-      // 프런트엔드에서는 오직 /api/chat을 호출
-      const reply = await sendChatMessage(newMessages);
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+      let isFirstChunk = true;
+
+      // 스트리밍 방식으로 청크를 받아 실시간 렌더링
+      await sendChatMessageStream(newMessages, (chunk) => {
+        if (isFirstChunk) {
+          isFirstChunk = false;
+          setIsLoading(false); // 첫 청크 수신 시 로딩 애니메이션 해제
+          setMessages((prev) => [...prev, { role: 'assistant', content: chunk }]);
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: updated[lastIdx].content + chunk,
+              };
+            }
+            return updated;
+          });
+        }
+      });
     } catch (err: unknown) {
       console.error(err);
       const msg = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
   };
@@ -74,6 +96,8 @@ export const Chatbot: React.FC = () => {
     }
   };
 
+  const isBusy = isLoading || isStreaming;
+
   return (
     <div className="chatbot-container">
       {/* 챗봇 헤더 */}
@@ -90,6 +114,7 @@ export const Chatbot: React.FC = () => {
           onClick={handleReset}
           className="chatbot-reset-btn"
           title="새 대화 시작"
+          disabled={isBusy}
         >
           새 대화
         </button>
@@ -150,7 +175,7 @@ export const Chatbot: React.FC = () => {
                 type="button"
                 className="quick-prompt-chip"
                 onClick={() => handleSendMessage(prompt)}
-                disabled={isLoading}
+                disabled={isBusy}
               >
                 {prompt}
               </button>
@@ -170,13 +195,13 @@ export const Chatbot: React.FC = () => {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={isLoading}
+            disabled={isBusy}
           />
           <button
             type="button"
             className="chatbot-send-btn"
             onClick={() => handleSendMessage()}
-            disabled={isLoading || !inputValue.trim()}
+            disabled={isBusy || !inputValue.trim()}
           >
             전송
           </button>
