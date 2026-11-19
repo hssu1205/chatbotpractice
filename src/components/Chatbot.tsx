@@ -5,16 +5,17 @@ import './Chatbot.css';
 const INITIAL_MESSAGE: ChatMessage = {
   role: 'assistant',
   content:
-    '안녕하세요! 🎓 **영어 단어 퀴즈 챗봇**입니다.\n\n원하시는 **주제**(예: 여행, 비즈니스, 일상 대화, IT)나 **난이도**(초급, 중급, 고급)를 말씀해 주세요!\n주제에 꼭 맞는 핵심 단어 3개와 복습 퀴즈를 준비해 드릴게요. 😊',
+    '안녕하세요! 🎓 **영어 단어 퀴즈 챗봇**입니다.\n\n원하시는 **주제**와 **난이도**를 아래 버튼에서 선택하시거나, 직접 입력창에 말씀해 주세요!\n조건에 꼭 맞는 핵심 단어 3개와 복습 퀴즈를 준비해 드릴게요. 😊',
 };
 
-const QUICK_PROMPTS = [
-  '공항 및 여행 영어 (초급)',
-  '비즈니스 회의 영어 (중급)',
-  '일상 대화 감정 표현 (초급)',
-  'IT / 프로그래밍 영단어 (중급)',
-  '고급 시사 / 뉴스 단어 (고급)',
+const TOPICS = [
+  '일상 회화',
+  '비즈니스 영어',
+  '공항/여행 영어',
+  '토익/수능 필수 단어',
 ];
+
+const LEVELS = ['초급', '중급', '고급'];
 
 export const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
@@ -22,6 +23,7 @@ export const Chatbot: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -32,11 +34,14 @@ export const Chatbot: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, selectedTopic]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend ?? inputValue).trim();
     if (!text || isLoading || isStreaming) return;
+
+    // 메시지 전송 시 선택 단계 초기화
+    setSelectedTopic(null);
 
     const userMessage: ChatMessage = { role: 'user', content: text };
     const newMessages = [...messages, userMessage];
@@ -81,6 +86,23 @@ export const Chatbot: React.FC = () => {
     }
   };
 
+  // 1단계: 주제 선택 시
+  const handleSelectTopic = (topic: string) => {
+    setSelectedTopic(topic);
+  };
+
+  // 2단계: 난이도 선택 시 -> 지정된 포맷으로 /api/chat 전송
+  const handleSelectLevel = (level: string) => {
+    if (!selectedTopic) return;
+    const formattedMessage = `주제: ${selectedTopic}\n난이도: ${level}\n위 조건에 맞는 영어 단어 퀴즈를 시작해줘.`;
+    handleSendMessage(formattedMessage);
+  };
+
+  // 주제 선택 취소 (다시 1단계로)
+  const handleCancelTopic = () => {
+    setSelectedTopic(null);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -93,6 +115,7 @@ export const Chatbot: React.FC = () => {
       setMessages([INITIAL_MESSAGE]);
       setErrorMessage(null);
       setInputValue('');
+      setSelectedTopic(null);
     }
   };
 
@@ -164,33 +187,68 @@ export const Chatbot: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 퀵 프롬프트 칩 */}
+      {/* 단계별 추천 선택 영역 (1단계: 주제 선택 -> 2단계: 난이도 선택) */}
       {messages.length <= 2 && (
         <div className="quick-prompts-container">
-          <span className="quick-prompt-label">💡 추천 주제:</span>
-          <div className="quick-prompt-chips">
-            {QUICK_PROMPTS.map((prompt, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="quick-prompt-chip"
-                onClick={() => handleSendMessage(prompt)}
-                disabled={isBusy}
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
+          {selectedTopic === null ? (
+            <>
+              <span className="quick-prompt-label">💡 1단계 주제 선택:</span>
+              <div className="quick-prompt-chips">
+                {TOPICS.map((topic, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="quick-prompt-chip"
+                    onClick={() => handleSelectTopic(topic)}
+                    disabled={isBusy}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="selected-topic-bar">
+                <span className="quick-prompt-label">🎯 2단계 난이도 선택:</span>
+                <span className="selected-topic-tag">
+                  주제: <strong>{selectedTopic}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="quick-prompt-back-btn"
+                  onClick={handleCancelTopic}
+                  disabled={isBusy}
+                  title="다른 주제 선택하기"
+                >
+                  ← 주제 변경
+                </button>
+              </div>
+              <div className="quick-prompt-chips">
+                {LEVELS.map((level, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="quick-prompt-chip quick-prompt-level-chip"
+                    onClick={() => handleSelectLevel(level)}
+                    disabled={isBusy}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* 입력 영역 */}
+      {/* 입력 영역 (직접 입력 기능 유지) */}
       <footer className="chatbot-footer">
         <div className="input-box-wrapper">
           <textarea
             ref={textareaRef}
             className="chatbot-textarea"
-            placeholder="주제(예: 여행, 비즈니스)나 퀴즈 정답을 입력하세요... (Enter로 전송)"
+            placeholder="주제(예: 여행, 비즈니스)를 직접 입력하거나 퀴즈 정답을 입력하세요... (Enter로 전송)"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}

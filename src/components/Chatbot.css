@@ -236,6 +236,45 @@
   color: #1d4ed8;
 }
 
+/* 2단계 선택 상태 UI */
+.selected-topic-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selected-topic-tag {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.quick-prompt-back-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.quick-prompt-back-btn:hover:not(:disabled) {
+  color: #1e293b;
+  background-color: #f1f5f9;
+}
+
+.quick-prompt-level-chip {
+  font-weight: 600;
+  min-width: 64px;
+  text-align: center;
+}
+
 /* Footer / Input */
 .chatbot-footer {
   padding: 16px 24px;
